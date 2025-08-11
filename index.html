@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Schedule Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* Custom styles for the application */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+
+        /* Tooltip styles */
+        .has-tooltip {
+            position: relative;
+        }
+
+        .tooltip {
+            visibility: hidden;
+            position: absolute;
+            bottom: 105%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            z-index: 20; /* Ensure tooltip is above other elements */
+            width: 280px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            font-size: 13px;
+            line-height: 1.5;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: left;
+        }
+
+        .has-tooltip:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Custom scrollbar for the schedule container */
+        .schedule-scroll-container {
+            overflow: auto; /* Changed to auto to handle both x and y scroll */
+        }
+        
+        .schedule-scroll-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .schedule-scroll-container::-webkit-scrollbar-track {
+            background: #e0e7ff;
+            border-radius: 10px;
+        }
+
+        .schedule-scroll-container::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 10px;
+        }
+
+        .schedule-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #4f46e5;
+        }
+        
+        /* Style for the file input button */
+        input[type="file"]::file-selector-button {
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background-color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="app" class="p-4 sm:p-6 lg:p-8 max-w-full mx-auto">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-gray-900">Provider Schedule Viewer</h1>
+            <p class="text-gray-600 mt-1">Upload a CSV file to view daily provider schedules.</p>
+        </header>
+
+        <!-- Centered container for upload and calendar -->
+        <div class="max-w-md mx-auto">
+            <!-- File Input Section -->
+            <div class="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-end justify-between space-x-4">
+                    <div class="flex-grow">
+                        <label for="csvFileInput" class="block text-sm font-medium text-gray-700 mb-2">Select Schedule CSV File:</label>
+                        <input type="file" id="csvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                    </div>
+                    <button id="generate-email-btn" class="flex-shrink-0 px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-md shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        Generate
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div id="main-content" class="hidden">
+                <!-- Calendar Section -->
+                <div id="calendar-container" class="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <button id="prev-month" class="p-2 rounded-md hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <h2 id="calendar-title" class="text-lg font-semibold"></h2>
+                        <button id="next-month" class="p-2 rounded-md hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-1 text-center text-sm"></div>
+                </div>
+            </div>
+
+             <!-- Initial Message -->
+            <div id="initial-message" class="text-center py-16 px-6 bg-white rounded-lg shadow-sm border border-gray-200">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">No schedule loaded</h3>
+                <p class="mt-1 text-sm text-gray-500">Please select a CSV file to get started.</p>
+            </div>
+        </div>
+
+        <!-- Schedule Display Section (moved outside the centered container to be full-width) -->
+        <div id="schedule-view-container" class="hidden mt-8">
+             <h3 id="schedule-date-title" class="text-xl font-bold text-gray-800 mb-4 text-center"></h3>
+             <div class="schedule-scroll-container bg-white rounded-lg shadow-sm border border-gray-200">
+                <div id="schedule-grid" class="flex min-w-max">
+                    <!-- Time slots will be injected here -->
+                    <div id="time-slots-wrapper" class="w-20 sticky left-0 bg-white z-20"></div>
+                    <!-- Provider columns will be injected here -->
+                    <div id="provider-columns" class="flex-grow flex"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Time Range Modal -->
+    <div id="time-range-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-10 mx-auto p-5 border w-auto max-w-lg shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900"></h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500 mb-4">Enter up to two time ranges (7am-6pm).</p>
+                    <!-- Time Range 1 -->
+                    <fieldset class="border p-4 rounded-md mb-4">
+                        <legend class="text-sm font-medium text-gray-700 px-2">Time Block 1</legend>
+                        <div class="flex items-center justify-center space-x-2 mb-3">
+                            <label for="start-time-1" class="text-sm">Start:</label>
+                            <input type="text" id="start-time-1" class="border border-gray-300 rounded-md p-1 w-28 text-center">
+                            <label for="end-time-1" class="text-sm">End:</label>
+                            <input type="text" id="end-time-1" class="border border-gray-300 rounded-md p-1 w-28 text-center">
+                        </div>
+                        <div id="covered-providers-1" class="text-sm text-left max-h-32 overflow-y-auto"></div>
+                    </fieldset>
+                    <!-- Time Range 2 -->
+                     <fieldset class="border p-4 rounded-md">
+                        <legend class="text-sm font-medium text-gray-700 px-2">Time Block 2</legend>
+                        <div class="flex items-center justify-center space-x-2 mb-3">
+                            <label for="start-time-2" class="text-sm">Start:</label>
+                            <input type="text" id="start-time-2" class="border border-gray-300 rounded-md p-1 w-28 text-center">
+                            <label for="end-time-2" class="text-sm">End:</label>
+                            <input type="text" id="end-time-2" class="border border-gray-300 rounded-md p-1 w-28 text-center">
+                        </div>
+                        <div id="covered-providers-2" class="text-sm text-left max-h-32 overflow-y-auto"></div>
+                    </fieldset>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="save-time-range" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        Save
+                    </button>
+                    <button id="close-time-range-modal" class="ml-2 px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Email Schedule Modal -->
+    <div id="email-schedule-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-10 mx-auto p-5 border w-auto max-w-6xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 text-center">Coverage Schedule</h3>
+                <div id="email-schedule-content" class="mt-4 bg-white overflow-x-auto">
+                    <!-- Generated image will be injected here -->
+                </div>
+                <div class="items-center px-4 py-3 text-right">
+                    <button id="copy-schedule-btn" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        Copy as Image
+                    </button>
+                    <button id="close-email-modal-btn" class="ml-2 px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- CONFIGURATION ---
+        const SCHEDULE_START_HOUR = 7; // 7:00 AM
+        const DEFAULT_SCHEDULE_END_HOUR = 19; // 7:00 PM
+        const PIXELS_PER_MINUTE = 2.5; // Controls the vertical scale of appointments
+        const MD_PROVIDERS = [
+            'Zayat, Estephan',
+            'Khneizer, Gebran',
+            'Tayyem, Obada',
+            'Lievens, Michael',
+            'Matta, Bassem',
+            'Sheu Woc, Winnie',
+            'Farha, Natalie'
+        ];
+
+        // --- DOM ELEMENTS ---
+        const csvFileInput = document.getElementById('csvFileInput');
+        const mainContent = document.getElementById('main-content');
+        const initialMessage = document.getElementById('initial-message');
+        const calendarContainer = document.getElementById('calendar-container');
+        const calendarTitle = document.getElementById('calendar-title');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+        const scheduleViewContainer = document.getElementById('schedule-view-container');
+        const scheduleDateTitle = document.getElementById('schedule-date-title');
+        const timeSlotsWrapper = document.getElementById('time-slots-wrapper');
+        const providerColumnsContainer = document.getElementById('provider-columns');
+        const timeRangeModal = document.getElementById('time-range-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const saveTimeRangeBtn = document.getElementById('save-time-range');
+        const closeTimeRangeModalBtn = document.getElementById('close-time-range-modal');
+        const generateEmailBtn = document.getElementById('generate-email-btn');
+        const emailScheduleModal = document.getElementById('email-schedule-modal');
+        const closeEmailModalBtn = document.getElementById('close-email-modal-btn');
+        const copyScheduleBtn = document.getElementById('copy-schedule-btn');
+
+        // --- STATE ---
+        let scheduleData = {}; // { 'YYYY-MM-DD': { 'ProviderName': [appointments] } }
+        let manualTimeRanges = {}; // { 'YYYY-MM-DD': { 'ProviderName': [{start, end, coveredProviders[]}] } }
+        let currentDate = new Date();
+        let currentModalContext = { provider: null, dateKey: null };
+        let currentScheduleDateKey = null;
+
+        // --- EVENT LISTENERS ---
+        csvFileInput.addEventListener('change', handleFileUpload);
+        prevMonthBtn.addEventListener('click', () => changeMonth(-1));
+        nextMonthBtn.addEventListener('click', () => changeMonth(1));
+        closeTimeRangeModalBtn.addEventListener('click', closeTimeRangeModal);
+        saveTimeRangeBtn.addEventListener('click', saveTimeRanges);
+        generateEmailBtn.addEventListener('click', generateEmailSchedule);
+        closeEmailModalBtn.addEventListener('click', () => emailScheduleModal.classList.add('hidden'));
+        copyScheduleBtn.addEventListener('click', copyScheduleAsImage);
+        
+        ['start-time-1', 'end-time-1', 'start-time-2', 'end-time-2'].forEach(id => {
+            document.getElementById(id).addEventListener('blur', (e) => formatSmartTime(e.target));
+        });
+
+
+        // --- FUNCTIONS ---
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                try {
+                    processCsvData(text);
+                    initialMessage.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    renderCalendar();
+                    const today = new Date();
+                    const todayKey = today.toISOString().split('T')[0];
+                    if(scheduleData[todayKey]) {
+                        renderSchedule(todayKey);
+                    }
+                } catch (error) {
+                    console.error("Error processing CSV:", error);
+                    alert("There was an error parsing the CSV file. Please ensure it is in the correct format.\n\n" + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function processCsvData(csvText) {
+            if (csvText.charCodeAt(0) === 0xFEFF) {
+                csvText = csvText.substring(1);
+            }
+
+            const rows = [];
+            let inQuotes = false;
+            let currentField = '';
+            let currentRow = [];
+            const text = csvText.replace(/\r\n/g, '\n');
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') {
+                    if (inQuotes && text[i + 1] === '"') {
+                        currentField += '"';
+                        i++; 
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                } else if (char === '\n' && !inQuotes) {
+                    currentRow.push(currentField);
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentField = '';
+                } else {
+                    currentField += char;
+                }
+            }
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            
+            if (rows.length < 2) throw new Error("No data rows found in CSV.");
+
+            const headers = rows[0].map(h => h.trim());
+            const requiredColumns = ['DateTime', 'Duration', 'Activity', 'Notes', 'Provider', 'Location'];
+            const colIndices = requiredColumns.reduce((acc, col) => {
+                acc[col] = headers.findIndex(h => h.trim() === col);
+                return acc;
+            }, {});
+
+            if (Object.values(colIndices).some(index => index === -1)) {
+                const missing = requiredColumns.filter(col => headers.findIndex(h => h.trim() === col) === -1);
+                throw new Error("CSV is missing one or more required columns: " + missing.join(', '));
+            }
+
+            const validProviders = new Set();
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                 if (row.length < headers.length) continue;
+                const providerRaw = row[colIndices.Provider] || '';
+                if ((providerRaw.match(/,/g) || []).length === 1) {
+                    validProviders.add(providerRaw.trim());
+                }
+            }
+
+            scheduleData = {};
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                if (row.length < headers.length) continue;
+
+                const cleanedRow = row.map(field => {
+                    let f = field.trim();
+                    if (f.startsWith('"') && f.endsWith('"')) f = f.substring(1, f.length - 1);
+                    return f.replace(/""/g, '"');
+                });
+
+                const dateTimeStr = cleanedRow[colIndices.DateTime]?.replace(/\s+/g, ' ');
+                if (!dateTimeStr) continue;
+
+                const dateObj = new Date(dateTimeStr);
+                if (isNaN(dateObj.getTime())) continue;
+
+                const dateKey = dateObj.toISOString().split('T')[0];
+                const providerRaw = cleanedRow[colIndices.Provider];
+                if (!providerRaw) continue;
+
+                let provider = providerRaw.trim();
+                if (!validProviders.has(provider)) {
+                    let foundProvider = null;
+                    for (const p of validProviders) {
+                        if (provider.startsWith(p)) {
+                            foundProvider = p;
+                            break;
+                        }
+                    }
+                    if (foundProvider) {
+                        provider = foundProvider;
+                    } else {
+                        const parts = provider.split(',');
+                        if (parts.length > 1) provider = `${parts[0]}, ${parts[1]}`.trim();
+                    }
+                }
+
+                if (!scheduleData[dateKey]) scheduleData[dateKey] = {};
+                if (!scheduleData[dateKey][provider]) scheduleData[dateKey][provider] = [];
+
+                scheduleData[dateKey][provider].push({
+                    dateTime: dateObj,
+                    duration: parseInt(cleanedRow[colIndices.Duration]) || 30,
+                    activity: cleanedRow[colIndices.Activity],
+                    notes: cleanedRow[colIndices.Notes],
+                    location: cleanedRow[colIndices.Location],
+                });
+            }
+
+            if (Object.keys(scheduleData).length === 0) {
+                alert("Could not find any valid appointment data in the file.");
+            }
+        }
+
+        function renderCalendar() {
+            calendarGrid.innerHTML = '';
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            calendarTitle.textContent = `${currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startDayOfWeek = firstDay.getDay();
+
+            ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(day => {
+                const dayEl = document.createElement('div');
+                dayEl.className = 'font-semibold text-gray-500 pb-2';
+                dayEl.textContent = day;
+                calendarGrid.appendChild(dayEl);
+            });
+
+            for (let i = 0; i < startDayOfWeek; i++) {
+                calendarGrid.appendChild(document.createElement('div'));
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const cell = document.createElement('button');
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                cell.textContent = day;
+                cell.dataset.date = dateKey;
+                // REMOVED focus ring from class list
+                cell.className = 'py-2 rounded-full transition-colors duration-200 focus:outline-none';
+
+                if (scheduleData[dateKey]) {
+                    cell.classList.add('bg-indigo-100', 'text-indigo-700', 'font-bold', 'hover:bg-indigo-200', 'cursor-pointer');
+                    cell.addEventListener('click', () => renderSchedule(dateKey));
+                } else {
+                    cell.classList.add('text-gray-400', 'cursor-not-allowed');
+                }
+
+                // REMOVED the ring for today's date
+                
+                calendarGrid.appendChild(cell);
+            }
+        }
+
+        function changeMonth(direction) {
+            currentDate.setMonth(currentDate.getMonth() + direction);
+            renderCalendar();
+        }
+
+        function renderSchedule(dateKey) {
+            currentScheduleDateKey = dateKey;
+            generateEmailBtn.disabled = false;
+
+            const dayData = scheduleData[dateKey];
+            if (!dayData) return;
+
+            const selectedDate = new Date(dateKey + 'T00:00:00');
+            scheduleDateTitle.textContent = `Schedule for ${selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+            
+            document.querySelectorAll('#calendar-grid button[data-date]').forEach(btn => {
+                // Reset all buttons that have appointments to their default "has appointment" style
+                if (scheduleData[btn.dataset.date]) {
+                    btn.classList.remove('bg-pink-500', 'text-white', 'hover:bg-pink-600');
+                    btn.classList.add('bg-indigo-100', 'text-indigo-700');
+                }
+                
+                // Apply the special "selected" style to the correct button
+                if (btn.dataset.date === dateKey) {
+                    btn.classList.remove('bg-indigo-100', 'text-indigo-700');
+                    btn.classList.add('bg-pink-500', 'text-white', 'hover:bg-pink-600');
+                }
+            });
+
+            let latestMinute = SCHEDULE_START_HOUR * 60;
+            Object.values(dayData).forEach(providerAppts => {
+                providerAppts.forEach(appt => {
+                    const startMinute = appt.dateTime.getHours() * 60 + appt.dateTime.getMinutes();
+                    const endMinute = startMinute + appt.duration;
+                    if (endMinute > latestMinute) latestMinute = endMinute;
+                });
+            });
+            const dynamicEndHour = Math.ceil(latestMinute / 60);
+            const scheduleEndHour = Math.min(23, Math.max(DEFAULT_SCHEDULE_END_HOUR, dynamicEndHour));
+
+            timeSlotsWrapper.innerHTML = '';
+            providerColumnsContainer.innerHTML = '';
+
+            const totalHeight = (scheduleEndHour - SCHEDULE_START_HOUR) * 60 * PIXELS_PER_MINUTE;
+            
+            const timeSlotsHeader = document.createElement('div');
+            timeSlotsHeader.className = 'py-3 border-b border-r border-gray-200 sticky top-0 bg-white';
+            timeSlotsHeader.style.height = '49px'; 
+            
+            const timeSlotsBody = document.createElement('div');
+            timeSlotsBody.className = 'border-r border-gray-200';
+            timeSlotsBody.style.height = `${totalHeight}px`;
+
+            for (let hour = SCHEDULE_START_HOUR; hour < scheduleEndHour; hour++) {
+                const slotHeight = 60 * PIXELS_PER_MINUTE;
+                const timeSlot = document.createElement('div');
+                timeSlot.style.height = `${slotHeight}px`;
+                timeSlot.className = 'flex items-start justify-center border-b border-gray-200 text-xs text-gray-500';
+                timeSlot.innerHTML = `<span class="bg-white px-1" style="margin-top: 5px;">${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? 'AM' : 'PM'}</span>`;
+                timeSlotsBody.appendChild(timeSlot);
+            }
+            timeSlotsWrapper.appendChild(timeSlotsHeader);
+            timeSlotsWrapper.appendChild(timeSlotsBody);
+
+            const providers = Object.keys(dayData).sort((a, b) => {
+                const aIsMD = MD_PROVIDERS.includes(a);
+                const bIsMD = MD_PROVIDERS.includes(b);
+                if (aIsMD && !bIsMD) return -1;
+                if (!aIsMD && bIsMD) return 1;
+                return a.localeCompare(b);
+            });
+
+            providers.forEach((provider, index) => {
+                const column = document.createElement('div');
+                // CHANGED: w-48 to w-40
+                let classes = 'w-40 border-l border-gray-200 flex-shrink-0';
+                if (index === providers.length - 1) {
+                    classes += ' border-r';
+                }
+                column.className = classes;
+                
+                const header = document.createElement('div');
+                header.className = 'text-center font-semibold py-3 border-b border-gray-200 sticky top-0 bg-white z-10';
+                header.textContent = provider;
+                
+                if (MD_PROVIDERS.includes(provider)) {
+                    header.classList.add('cursor-pointer', 'hover:bg-gray-100');
+                    header.addEventListener('click', () => openTimeRangeModal(provider, dateKey));
+                }
+
+                const scheduleArea = document.createElement('div');
+                scheduleArea.className = 'relative h-full';
+                scheduleArea.style.height = `${totalHeight}px`;
+
+
+                dayData[provider].sort((a,b) => a.dateTime - b.dateTime).forEach(appt => {
+                    const apptEl = createAppointmentElement(appt, provider);
+                    scheduleArea.appendChild(apptEl);
+                });
+
+                column.appendChild(header);
+                column.appendChild(scheduleArea);
+                providerColumnsContainer.appendChild(column);
+            });
+
+            scheduleViewContainer.classList.remove('hidden');
+            scheduleViewContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            setTimeout(() => {
+                const scheduleTitleEl = document.getElementById('schedule-date-title');
+                const titleRect = scheduleTitleEl.getBoundingClientRect();
+                const topOffset = titleRect.top + titleRect.height + 16;
+                const scheduleScrollContainer = document.querySelector('.schedule-scroll-container');
+                scheduleScrollContainer.style.height = `calc(100vh - ${topOffset}px)`;
+            }, 300);
+        }
+
+        function createAppointmentElement(appt, provider) {
+            const el = document.createElement('div');
+            const startMinutes = appt.dateTime.getHours() * 60 + appt.dateTime.getMinutes();
+            const top = (startMinutes - (SCHEDULE_START_HOUR * 60)) * PIXELS_PER_MINUTE;
+            const height = appt.duration * PIXELS_PER_MINUTE;
+
+            const bgColor = getAppointmentColor(provider, appt.location, appt.activity);
+
+            el.style.position = 'absolute';
+            el.style.top = `${top}px`;
+            el.style.height = `${height - 2}px`;
+            el.style.left = '4px';
+            el.style.right = '4px';
+
+            el.className = `has-tooltip p-2 rounded-lg text-white text-xs border ${bgColor}`;
+            
+            const time = appt.dateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            el.innerHTML = `
+                <div class="font-bold whitespace-normal">${appt.activity}</div>
+                <div>${time} (${appt.duration} min)</div>
+                <div class="tooltip">
+                    <strong>Location:</strong> ${appt.location}<br>
+                    <strong>Notes:</strong><br>
+                    ${appt.notes.replace(/\n/g, '<br>') || 'No notes available.'}
+                </div>
+            `;
+            
+            return el;
+        }
+
+        function getAppointmentColor(provider, location = '', activity = '') {
+            const isClinic = location.includes('KS Gastro Clinic') || location.includes('Acute Care Clinic');
+            
+            if (MD_PROVIDERS.includes(provider) && isClinic) {
+                return 'bg-pink-500 border-pink-700';
+            }
+
+            if (location.includes('ASC')) {
+                return 'bg-cyan-500 border-cyan-700'; // Solid blue for ASC
+            }
+            
+            if (isClinic) {
+                return 'bg-teal-500 border-teal-700'; // Solid teal for non-MD clinic
+            }
+
+            // Fallback default color
+            return 'bg-purple-500 border-purple-700';
+        }
+
+        function format24hto12h(time24) {
+            if (!time24) return '';
+            const [hour, minute] = time24.split(':').map(Number);
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${String(displayHour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+        }
+
+        function openTimeRangeModal(provider, dateKey) {
+            currentModalContext = { provider, dateKey };
+            modalTitle.textContent = `Set Time Ranges for ${provider}`;
+
+            // Clear previous values
+            ['start-time-1', 'end-time-1', 'start-time-2', 'end-time-2'].forEach(id => {
+                const el = document.getElementById(id);
+                el.value = '';
+                el.dataset.time24 = '';
+            });
+
+            // Populate non-MD provider selection lists
+            const dayData = scheduleData[dateKey];
+            const nonMDs = Object.keys(dayData).filter(p => !MD_PROVIDERS.includes(p)).sort();
+            
+            const coveredProvidersDiv1 = document.getElementById('covered-providers-1');
+            const coveredProvidersDiv2 = document.getElementById('covered-providers-2');
+            coveredProvidersDiv1.innerHTML = '';
+            coveredProvidersDiv2.innerHTML = '';
+
+            const createProviderCheckboxes = (container, blockNum) => {
+                if (nonMDs.length > 0) {
+                    // "All" checkbox
+                    const allContainer = document.createElement('div');
+                    allContainer.className = 'font-bold mb-1';
+                    const allId = `all-providers-${blockNum}`;
+                    allContainer.innerHTML = `<input type="checkbox" id="${allId}" class="mr-2"><label for="${allId}">All</label>`;
+                    container.appendChild(allContainer);
+                    document.getElementById(allId).addEventListener('change', (e) => {
+                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                            if(cb.id !== allId) cb.checked = e.target.checked;
+                        });
+                    });
+
+                    // Individual provider checkboxes
+                    nonMDs.forEach(p => {
+                        const id = `provider-${blockNum}-${p.replace(/[^a-zA-Z0-9]/g, '')}`;
+                        const div = document.createElement('div');
+                        div.innerHTML = `<input type="checkbox" id="${id}" value="${p}" class="mr-2"><label for="${id}">${p}</label>`;
+                        container.appendChild(div);
+                    });
+                } else {
+                    container.innerHTML = `<p class="text-gray-500">No non-MD providers scheduled for this day.</p>`;
+                }
+            };
+
+            createProviderCheckboxes(coveredProvidersDiv1, 1);
+            createProviderCheckboxes(coveredProvidersDiv2, 2);
+            
+            // Populate with existing data if it exists
+            const existingRanges = manualTimeRanges[dateKey]?.[provider];
+            if (existingRanges) {
+                if (existingRanges[0]) {
+                    const start1Input = document.getElementById('start-time-1');
+                    const end1Input = document.getElementById('end-time-1');
+                    start1Input.dataset.time24 = existingRanges[0].start || '';
+                    end1Input.dataset.time24 = existingRanges[0].end || '';
+                    start1Input.value = format24hto12h(existingRanges[0].start);
+                    end1Input.value = format24hto12h(existingRanges[0].end);
+                    (existingRanges[0].coveredProviders || []).forEach(p => {
+                        const id = `provider-1-${p.replace(/[^a-zA-Z0-9]/g, '')}`;
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+                if (existingRanges[1]) {
+                    const start2Input = document.getElementById('start-time-2');
+                    const end2Input = document.getElementById('end-time-2');
+                    start2Input.dataset.time24 = existingRanges[1].start || '';
+                    end2Input.dataset.time24 = existingRanges[1].end || '';
+                    start2Input.value = format24hto12h(existingRanges[1].start);
+                    end2Input.value = format24hto12h(existingRanges[1].end);
+                     (existingRanges[1].coveredProviders || []).forEach(p => {
+                        const id = `provider-2-${p.replace(/[^a-zA-Z0-9]/g, '')}`;
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+            }
+
+            timeRangeModal.classList.remove('hidden');
+        }
+
+        function closeTimeRangeModal() {
+            timeRangeModal.classList.add('hidden');
+        }
+
+        function saveTimeRanges() {
+            const { provider, dateKey } = currentModalContext;
+            if (!provider || !dateKey) return;
+
+            const ranges = [];
+            
+            const getBlockData = (blockNum) => {
+                const start = document.getElementById(`start-time-${blockNum}`).dataset.time24;
+                const end = document.getElementById(`end-time-${blockNum}`).dataset.time24;
+                const coveredProviders = [];
+                document.querySelectorAll(`#covered-providers-${blockNum} input[type="checkbox"]:checked`).forEach(cb => {
+                    if (cb.id.startsWith('provider-')) coveredProviders.push(cb.value);
+                });
+                if (start && end) {
+                    return { start, end, coveredProviders };
+                }
+                return null;
+            };
+
+            const block1 = getBlockData(1);
+            const block2 = getBlockData(2);
+
+            if (block1) ranges.push(block1);
+            if (block2) ranges.push(block2);
+
+            if (!manualTimeRanges[dateKey]) {
+                manualTimeRanges[dateKey] = {};
+            }
+            manualTimeRanges[dateKey][provider] = ranges;
+            
+            console.log("Saved Time Ranges:", manualTimeRanges); // For debugging
+            closeTimeRangeModal();
+        }
+
+        function formatSmartTime(inputElement) {
+            let value = inputElement.value.trim();
+            if (!value) {
+                inputElement.dataset.time24 = '';
+                return;
+            }
+
+            const match = value.replace(':', '').match(/(\d{1,2})(\d{2})?\s*(am|pm)?/i);
+            if (!match) {
+                inputElement.value = '';
+                inputElement.dataset.time24 = '';
+                return;
+            }
+
+            let hour = parseInt(match[1], 10);
+            let minute = parseInt(match[2], 10) || 0;
+            let period = (match[3] || '').toLowerCase();
+
+            if (isNaN(hour)) {
+                inputElement.value = '';
+                inputElement.dataset.time24 = '';
+                return;
+            }
+            
+            if (!period) {
+                if (hour >= 1 && hour <= 6) { 
+                    period = 'pm';
+                } else if (hour >= 7 && hour <= 11) {
+                    period = 'am';
+                } else if (hour === 12) {
+                    period = 'pm';
+                }
+            }
+
+            let hour24 = hour;
+            if (period === 'pm' && hour < 12) {
+                hour24 += 12;
+            } else if (period === 'am' && hour === 12) { 
+                hour24 = 0;
+            }
+
+            if (hour24 < 7) hour24 = 7;
+            if (hour24 > 18) hour24 = 18;
+            if (minute < 0) minute = 0;
+            if (minute > 59) minute = 59;
+
+            const formattedHour24 = String(hour24).padStart(2, '0');
+            const formattedMinute = String(minute).padStart(2, '0');
+            
+            const time24 = `${formattedHour24}:${formattedMinute}`;
+            inputElement.dataset.time24 = time24;
+            
+            inputElement.value = format24hto12h(time24);
+        }
+
+        // --- Email Schedule Generation ---
+        function generateEmailSchedule() {
+            if (!currentScheduleDateKey || !scheduleData[currentScheduleDateKey]) {
+                alert("Please select a day with a schedule first.");
+                return;
+            }
+
+            const dayData = scheduleData[currentScheduleDateKey];
+            const timeRanges = manualTimeRanges[currentScheduleDateKey] || {};
+            
+            const allProviders = Object.keys(dayData);
+            const mdWithRanges = MD_PROVIDERS.filter(p => timeRanges[p] && timeRanges[p].length > 0).sort();
+            const nonMDs = allProviders.filter(p => !MD_PROVIDERS.includes(p)).sort();
+
+            const timeToMinutes = (time) => {
+                if (!time) return 0;
+                const [h, m] = time.split(':').map(Number);
+                return h * 60 + m;
+            };
+
+            const minutesTo12h = (minutes) => {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                const period = h >= 12 ? 'PM' : 'AM';
+                const displayH = h % 12 || 12;
+                return `${displayH}:${String(m).padStart(2, '0')} ${period}`;
+            };
+            
+            const minutesToShortTime = (minutes) => {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                const displayH = h % 12 || 12;
+                if (m === 0) return `${displayH}`;
+                return `${displayH}:${String(m).padStart(2, '0')}`;
+            };
+
+            // Process non-MDs to consolidate their schedules
+            const consolidatedSchedules = {};
+            nonMDs.forEach(provider => {
+                const appointments = dayData[provider].sort((a,b) => a.dateTime - b.dateTime);
+                if (appointments.length === 0) return;
+
+                let blocks = [];
+                let currentBlock = {
+                    start: appointments[0].dateTime.getHours() * 60 + appointments[0].dateTime.getMinutes(),
+                    end: (appointments[0].dateTime.getHours() * 60 + appointments[0].dateTime.getMinutes()) + appointments[0].duration
+                };
+
+                for (let i = 1; i < appointments.length; i++) {
+                    const appt = appointments[i];
+                    const apptStart = appt.dateTime.getHours() * 60 + appt.dateTime.getMinutes();
+                    const gap = apptStart - currentBlock.end;
+
+                    if (gap <= 15) { // If gap is 15 mins or less, merge
+                        currentBlock.end = apptStart + appt.duration;
+                    } else { // If gap is larger, save current block and start a new one
+                        blocks.push(currentBlock);
+                        currentBlock = { start: apptStart, end: apptStart + appt.duration };
+                    }
+                }
+                blocks.push(currentBlock);
+                consolidatedSchedules[provider] = blocks;
+            });
+
+            // Build the ordered list of providers for the table
+            const providersToDisplay = [];
+            const displayedNonMDs = new Set();
+            
+            mdWithRanges.forEach(md => {
+                providersToDisplay.push({ name: md, isMD: true, blocks: (timeRanges[md] || []).map(r => ({start: timeToMinutes(r.start), end: timeToMinutes(r.end)})) });
+                const mdRanges = timeRanges[md] || [];
+                const coveredInAllBlocks = new Set();
+                mdRanges.forEach(range => {
+                    (range.coveredProviders || []).forEach(p => coveredInAllBlocks.add(p));
+                });
+                
+                Array.from(coveredInAllBlocks).sort().forEach(nonMD => {
+                    if (consolidatedSchedules[nonMD]) {
+                       providersToDisplay.push({ name: nonMD, isMD: false, blocks: consolidatedSchedules[nonMD] });
+                       displayedNonMDs.add(nonMD);
+                    }
+                });
+            });
+
+            // Add any remaining non-MDs who weren't assigned
+            nonMDs.forEach(nonMD => {
+                if (!displayedNonMDs.has(nonMD)) {
+                    providersToDisplay.push({ name: nonMD, isMD: false, blocks: consolidatedSchedules[nonMD] });
+                }
+            });
+
+
+            // Build the HTML table
+            const tableStartHour = 8;
+            const tableEndHour = 17; // 5 PM
+            // CHANGED: Set to separate borders and zero spacing
+            let tableHTML = `<table style="border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%;">`;
+
+            tableHTML += `<colgroup><col style="width: 75px;">`; 
+            for (let i = 0; i < (tableEndHour - tableStartHour) * 2; i++) {
+                tableHTML += `<col style="width: 55px;">`; 
+            }
+            tableHTML += `</colgroup><tbody>`;
+
+            providersToDisplay.forEach((providerInfo, index) => {
+                const { name: provider, isMD, blocks } = providerInfo;
+                
+                if (isMD) {
+                    if (index > 0) { // Add blank row only if it's not the very first provider
+                        tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
+                    }
+                    // Add hour header row
+                    tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
+                    // CHANGED: Border color to #555
+                    tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
+                    for (let h = tableStartHour; h < tableEndHour; h++) {
+                        const displayH = h % 12 || 12;
+                        const period = h < 12 ? 'AM' : 'PM';
+                        // CHANGED: Border color to #555
+                        tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
+                    }
+                    tableHTML += `</tr>`;
+                }
+
+                const displayName = isMD ? provider.split(',')[0] : provider.split(',')[1].trim().split(' ')[0];
+                const rowHeight = isMD ? '40px' : '20px';
+                const fontWeight = isMD ? 'bold' : 'normal';
+                // CHANGED: Border color to #555
+                tableHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px;">${displayName}</td>`;
+                
+                let timeline = Array((tableEndHour - tableStartHour) * 2).fill(null); // 30-min slots
+                
+                if (blocks) {
+                    blocks.forEach(block => {
+                        const startSlot = Math.floor((block.start - tableStartHour * 60) / 30);
+                        const endSlot = Math.ceil((block.end - tableStartHour * 60) / 30);
+                        const duration = block.end - block.start;
+                        let text;
+                        if (duration < 60) {
+                            text = `${minutesToShortTime(block.start)}-${minutesToShortTime(block.end)}`;
+                        } else {
+                            text = `${minutesTo12h(block.start)} - ${minutesTo12h(block.end)}`;
+                        }
+
+                        for (let i = startSlot; i < endSlot; i++) {
+                            if (i >= 0 && i < timeline.length) {
+                                timeline[i] = { text: text };
+                            }
+                        }
+                    });
+                }
+                
+                for(let i = 0; i < timeline.length; i++) {
+                    if (timeline[i] && (i === 0 || timeline[i].text !== timeline[i-1]?.text)) {
+                         let colspan = 1;
+                         while(i + colspan < timeline.length && timeline[i+colspan]?.text === timeline[i].text) {
+                             colspan++;
+                         }
+                         const color = isMD ? '#F472B6' : '#2DD4BF'; // Pink-400 for MDs, Teal-400 for others
+                         // CHANGED: Pink border color is now #bf2269
+                         const borderColor = isMD ? '#bf2269' : '#0D9488'; // Darker: Pink-600, Teal-600
+                         const fullText = timeline[i].text;
+                         tableHTML += `<td colspan="${colspan}" style="background-color: ${color}; color: white; text-align: center; padding: 4px; border: 1px solid ${borderColor}; font-size: 8pt; white-space: normal; word-wrap: break-word;">${fullText}</td>`;
+                         i += colspan - 1;
+                    } else if (!timeline[i]) {
+                         // CHANGED: Empty cells now have no border
+                         tableHTML += `<td style="border: none;"></td>`;
+                    }
+                }
+                tableHTML += `</tr>`;
+            });
+
+            tableHTML += `</tbody></table>`;
+            document.getElementById('email-schedule-content').innerHTML = tableHTML;
+            emailScheduleModal.classList.remove('hidden');
+        }
+
+        async function copyScheduleAsImage() {
+            const content = document.getElementById('email-schedule-content');
+            const table = content.querySelector('table');
+            if (!table) return;
+
+            try {
+                const canvas = await html2canvas(table, {
+                    width: table.scrollWidth,
+                    height: table.scrollHeight,
+                    scale: 2 // Increase scale for better resolution
+                });
+                canvas.toBlob(async (blob) => {
+                    try {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ 'image/png': blob })
+                        ]);
+                        alert('Schedule image copied to clipboard!');
+                    } catch (err) {
+                        console.error('Failed to copy image to clipboard:', err);
+                        alert('Oops, unable to copy image automatically. Please right-click the image to copy.');
+                        const img = document.createElement('img');
+                        img.src = canvas.toDataURL('image/png');
+                        img.style.maxWidth = '100%';
+                        img.style.border = '1px solid #ccc';
+                        content.innerHTML = '';
+                        content.appendChild(img);
+                    }
+                });
+            } catch (err) {
+                console.error('html2canvas failed:', err);
+                alert('Oops, could not generate the image.');
+            }
+        }
+
+    </script>
+</body>
+</html>
