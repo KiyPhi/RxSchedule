@@ -891,70 +891,26 @@
                 });
             });
 
-            // Add any remaining non-MDs who weren't assigned
-            nonMDs.forEach(nonMD => {
-                if (!displayedNonMDs.has(nonMD)) {
-                    providersToDisplay.push({ name: nonMD, isMD: false, blocks: consolidatedSchedules[nonMD] });
-                }
-            });
+            const unassignedNonMDs = nonMDs.filter(nonMD => !displayedNonMDs.has(nonMD));
 
-
-            // Build the HTML table
-            const tableStartHour = 8;
-            const tableEndHour = 17; // 5 PM
-            // CHANGED: Set to separate borders and zero spacing
-            let tableHTML = `<table style="border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%;">`;
-
-            tableHTML += `<colgroup><col style="width: 75px;">`; 
-            for (let i = 0; i < (tableEndHour - tableStartHour) * 2; i++) {
-                tableHTML += `<col style="width: 55px;">`; 
-            }
-            tableHTML += `</colgroup><tbody>`;
-
-            providersToDisplay.forEach((providerInfo, index) => {
+            // --- Helper function to render a provider row ---
+            const renderProviderRow = (providerInfo) => {
                 const { name: provider, isMD, blocks } = providerInfo;
-                
-                if (isMD) {
-                    if (index > 0) { // Add blank row only if it's not the very first provider
-                        tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
-                    }
-                    // Add hour header row
-                    tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
-                    // CHANGED: Border color to #555
-                    tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
-                    for (let h = tableStartHour; h < tableEndHour; h++) {
-                        const displayH = h % 12 || 12;
-                        const period = h < 12 ? 'AM' : 'PM';
-                        // CHANGED: Border color to #555
-                        tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
-                    }
-                    tableHTML += `</tr>`;
-                }
-
+                let rowHTML = '';
                 const displayName = isMD ? provider.split(',')[0] : provider.split(',')[1].trim().split(' ')[0];
                 const rowHeight = isMD ? '40px' : '20px';
                 const fontWeight = isMD ? 'bold' : 'normal';
-                // CHANGED: Border color to #555
-                tableHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px;">${displayName}</td>`;
+                rowHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px;">${displayName}</td>`;
                 
-                let timeline = Array((tableEndHour - tableStartHour) * 2).fill(null); // 30-min slots
-                
+                let timeline = Array((tableEndHour - tableStartHour) * 2).fill(null);
                 if (blocks) {
                     blocks.forEach(block => {
                         const startSlot = Math.floor((block.start - tableStartHour * 60) / 30);
                         const endSlot = Math.ceil((block.end - tableStartHour * 60) / 30);
                         const duration = block.end - block.start;
-                        let text;
-                        if (duration < 60) {
-                            text = `${minutesToShortTime(block.start)}-${minutesToShortTime(block.end)}`;
-                        } else {
-                            text = `${minutesTo12h(block.start)} - ${minutesTo12h(block.end)}`;
-                        }
-
+                        let text = duration < 60 ? `${minutesToShortTime(block.start)}-${minutesToShortTime(block.end)}` : `${minutesTo12h(block.start)} - ${minutesTo12h(block.end)}`;
                         for (let i = startSlot; i < endSlot; i++) {
-                            if (i >= 0 && i < timeline.length) {
-                                timeline[i] = { text: text };
-                            }
+                            if (i >= 0 && i < timeline.length) timeline[i] = { text: text };
                         }
                     });
                 }
@@ -962,27 +918,65 @@
                 for(let i = 0; i < timeline.length; i++) {
                     if (timeline[i] && (i === 0 || timeline[i].text !== timeline[i-1]?.text)) {
                          let colspan = 1;
-                         while(i + colspan < timeline.length && timeline[i+colspan]?.text === timeline[i].text) {
-                             colspan++;
-                         }
-                         const color = isMD ? '#F472B6' : '#2DD4BF'; // Pink-400 for MDs, Teal-400 for others
-                         // CHANGED: Pink border color is now #bf2269
-                         const borderColor = isMD ? '#bf2269' : '#0D9488'; // Darker: Pink-600, Teal-600
-                         const fullText = timeline[i].text;
-                         tableHTML += `<td colspan="${colspan}" style="background-color: ${color}; color: white; text-align: center; padding: 4px; border: 1px solid ${borderColor}; font-size: 8pt; white-space: normal; word-wrap: break-word;">${fullText}</td>`;
+                         while(i + colspan < timeline.length && timeline[i+colspan]?.text === timeline[i].text) colspan++;
+                         const color = isMD ? '#F472B6' : '#2DD4BF';
+                         const borderColor = isMD ? '#bf2269' : '#0D9488';
+                         rowHTML += `<td colspan="${colspan}" style="background-color: ${color}; color: white; text-align: center; padding: 4px; border: 1px solid ${borderColor}; font-size: 8pt; white-space: normal; word-wrap: break-word;">${timeline[i].text}</td>`;
                          i += colspan - 1;
                     } else if (!timeline[i]) {
-                         // CHANGED: Empty cells now have no border
-                         tableHTML += `<td style="border: none;"></td>`;
+                         rowHTML += `<td style="border: none;"></td>`;
                     }
                 }
-                tableHTML += `</tr>`;
+                rowHTML += `</tr>`;
+                return rowHTML;
+            };
+
+            const tableStartHour = 8;
+            const tableEndHour = 17;
+            let tableHTML = `<table style="border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%;">`;
+            tableHTML += `<colgroup><col style="width: 75px;"><col span="${(tableEndHour - tableStartHour) * 2}" style="width: 55px;"></colgroup><tbody>`;
+
+            // Render assigned providers
+            providersToDisplay.forEach((providerInfo) => {
+                if (providerInfo.isMD) {
+                    if (tableHTML.includes('</tr>')) { // Add spacer if not the very first MD
+                         tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
+                    }
+                    tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
+                    tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
+                    for (let h = tableStartHour; h < tableEndHour; h++) {
+                        const displayH = h % 12 || 12;
+                        const period = h < 12 ? 'AM' : 'PM';
+                        tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
+                    }
+                    tableHTML += `</tr>`;
+                }
+                tableHTML += renderProviderRow(providerInfo);
             });
+
+            // Render Unassigned PAs section if needed
+            if (unassignedNonMDs.length > 0) {
+                tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
+                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;"><th colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="text-align: center; padding: 4px; border: 1px solid #555; font-size: 12px; font-weight: bold;">Unassigned PAs</th></tr>`;
+                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
+                tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
+                for (let h = tableStartHour; h < tableEndHour; h++) {
+                    const displayH = h % 12 || 12;
+                    const period = h < 12 ? 'AM' : 'PM';
+                    tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
+                }
+                tableHTML += `</tr>`;
+                unassignedNonMDs.forEach(providerName => {
+                    const providerInfo = { name: providerName, isMD: false, blocks: consolidatedSchedules[providerName] };
+                    tableHTML += renderProviderRow(providerInfo);
+                });
+            }
 
             tableHTML += `</tbody></table>`;
             document.getElementById('email-schedule-content').innerHTML = tableHTML;
             emailScheduleModal.classList.remove('hidden');
         }
+
 
         async function copyScheduleAsImage() {
             const content = document.getElementById('email-schedule-content');
