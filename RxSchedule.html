@@ -83,6 +83,17 @@
         input[type="file"]::file-selector-button:hover {
             background-color: #4f46e5;
         }
+
+        /* Styles for draggable modal */
+        #time-range-modal-box {
+            cursor: move;
+        }
+        #time-range-modal-box fieldset, 
+        #time-range-modal-box button,
+        #time-range-modal-box input,
+        #time-range-modal-box label {
+            cursor: default;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -151,8 +162,8 @@
 
     <!-- Time Range Modal -->
     <div id="time-range-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-10 mx-auto p-5 border w-auto max-w-lg shadow-lg rounded-md bg-white">
-            <div class="mt-3 text-center">
+        <div id="time-range-modal-box" class="absolute p-5 border w-auto max-w-lg shadow-lg rounded-md bg-white">
+            <div id="modal-content-area" class="mt-3 text-center">
                 <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900"></h3>
                 <div class="mt-2 px-7 py-3">
                     <p class="text-sm text-gray-500 mb-4">Enter up to two time ranges (7am-6pm).</p>
@@ -248,6 +259,8 @@
         const emailScheduleModal = document.getElementById('email-schedule-modal');
         const closeEmailModalBtn = document.getElementById('close-email-modal-btn');
         const copyScheduleBtn = document.getElementById('copy-schedule-btn');
+        const timeRangeModalBox = document.getElementById('time-range-modal-box');
+        const modalContentArea = document.getElementById('modal-content-area');
 
         // --- STATE ---
         let scheduleData = {}; // { 'YYYY-MM-DD': { 'ProviderName': [appointments] } }
@@ -635,6 +648,19 @@
             currentModalContext = { provider, dateKey };
             modalTitle.textContent = `Set Time Ranges for ${provider}`;
 
+            // Make the modal visible first to get its dimensions for centering
+            timeRangeModal.classList.remove('hidden');
+            
+            // Now calculate and apply the centered position
+            const modalWidth = timeRangeModalBox.offsetWidth;
+            const modalHeight = timeRangeModalBox.offsetHeight;
+            const viewWidth = window.innerWidth;
+            const viewHeight = window.innerHeight;
+
+            timeRangeModalBox.style.left = `${(viewWidth - modalWidth) / 2}px`;
+            timeRangeModalBox.style.top = `${(viewHeight - modalHeight) / 2}px`;
+            timeRangeModalBox.style.transform = 'none'; // Ensure no transform is present
+
             // Clear previous values
             ['start-time-1', 'end-time-1', 'start-time-2', 'end-time-2'].forEach(id => {
                 const el = document.getElementById(id);
@@ -710,8 +736,6 @@
                     });
                 }
             }
-
-            timeRangeModal.classList.remove('hidden');
         }
 
         function closeTimeRangeModal() {
@@ -877,16 +901,38 @@
             
             mdWithRanges.forEach(md => {
                 providersToDisplay.push({ name: md, isMD: true, blocks: (timeRanges[md] || []).map(r => ({start: timeToMinutes(r.start), end: timeToMinutes(r.end)})) });
-                const mdRanges = timeRanges[md] || [];
-                const coveredInAllBlocks = new Set();
-                mdRanges.forEach(range => {
-                    (range.coveredProviders || []).forEach(p => coveredInAllBlocks.add(p));
-                });
                 
-                Array.from(coveredInAllBlocks).sort().forEach(nonMD => {
+                const mdRanges = (timeRanges[md] || []).map(r => ({
+                    start: timeToMinutes(r.start),
+                    end: timeToMinutes(r.end),
+                    coveredProviders: r.coveredProviders || []
+                }));
+
+                const allCoveredPAsForThisMD = new Set();
+                mdRanges.forEach(range => {
+                    range.coveredProviders.forEach(p => allCoveredPAsForThisMD.add(p));
+                });
+
+                Array.from(allCoveredPAsForThisMD).sort().forEach(nonMD => {
                     if (consolidatedSchedules[nonMD]) {
-                       providersToDisplay.push({ name: nonMD, isMD: false, blocks: consolidatedSchedules[nonMD] });
-                       displayedNonMDs.add(nonMD);
+                        const paWorkBlocks = consolidatedSchedules[nonMD];
+                        let visibleBlocks = [];
+
+                        paWorkBlocks.forEach(paBlock => {
+                            mdRanges.forEach(mdBlock => {
+                                if (mdBlock.coveredProviders.includes(nonMD)) {
+                                    const overlapStart = Math.max(paBlock.start, mdBlock.start);
+                                    const overlapEnd = Math.min(paBlock.end, mdBlock.end);
+
+                                    if (overlapStart < overlapEnd) {
+                                        visibleBlocks.push({ start: overlapStart, end: overlapEnd });
+                                    }
+                                }
+                            });
+                        });
+                        
+                        providersToDisplay.push({ name: nonMD, isMD: false, blocks: visibleBlocks });
+                        displayedNonMDs.add(nonMD);
                     }
                 });
             });
@@ -1011,6 +1057,52 @@
                 alert('Oops, could not generate the image.');
             }
         }
+        
+        // --- Draggable Modal Logic ---
+        function makeDraggable(elmnt, handle) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            handle.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                
+                // Prevent drag from starting on interactive elements
+                const nonDraggableTags = ['INPUT', 'BUTTON', 'LABEL', 'SELECT', 'FIELDSET', 'LEGEND'];
+                if (nonDraggableTags.includes(e.target.tagName) || e.target.closest('fieldset')) {
+                    return;
+                }
+
+                e.preventDefault();
+                // Get the mouse cursor position at startup:
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                // Call a function whenever the cursor moves:
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                // Calculate the new cursor position:
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                // Set the element's new position:
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+            }
+
+            function closeDragElement() {
+                // Stop moving when mouse button is released:
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        makeDraggable(timeRangeModalBox, timeRangeModalBox);
 
     </script>
 </body>
