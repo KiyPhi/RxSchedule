@@ -6,7 +6,8 @@
     <title>Rx Schedule Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- MODIFIED: Switched to dom-to-image library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
     <style>
         /* Custom styles for the application */
         body {
@@ -94,6 +95,37 @@
         #time-range-modal-box label {
             cursor: default;
         }
+
+        /* Toast Notification Styles */
+        #toast-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+            z-index: 100;
+        }
+
+        #toast-notification.show {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        #toast-notification.success {
+            background-color: #06b6d4; /* Cyan 500 */
+        }
+
+        #toast-notification.error {
+            background-color: #EF4444; /* Red 500 */
+        }
+
     </style>
 </head>
 <body class="text-gray-800">
@@ -222,6 +254,9 @@
         </div>
     </div>
 
+    <!-- Toast Notification Element -->
+    <div id="toast-notification"></div>
+
 
     <script>
         // --- CONFIGURATION ---
@@ -261,6 +296,7 @@
         const copyScheduleBtn = document.getElementById('copy-schedule-btn');
         const timeRangeModalBox = document.getElementById('time-range-modal-box');
         const modalContentArea = document.getElementById('modal-content-area');
+        const toastNotification = document.getElementById('toast-notification');
 
         // --- STATE ---
         let scheduleData = {}; // { 'YYYY-MM-DD': { 'ProviderName': [appointments] } }
@@ -268,6 +304,7 @@
         let currentDate = new Date();
         let currentModalContext = { provider: null, dateKey: null };
         let currentScheduleDateKey = null;
+        let toastTimeout;
 
         // --- EVENT LISTENERS ---
         csvFileInput.addEventListener('change', handleFileUpload);
@@ -285,6 +322,22 @@
 
 
         // --- FUNCTIONS ---
+
+        function showToast(message, isError = false) {
+            // Clear any existing timer
+            clearTimeout(toastTimeout);
+
+            toastNotification.textContent = message;
+            toastNotification.className = isError ? 'error' : 'success';
+            
+            // Show the toast
+            toastNotification.classList.add('show');
+
+            // Set a timer to hide it after 3 seconds
+            toastTimeout = setTimeout(() => {
+                toastNotification.classList.remove('show');
+            }, 3000);
+        }
 
         function handleFileUpload(event) {
             const file = event.target.files[0];
@@ -305,7 +358,7 @@
                     }
                 } catch (error) {
                     console.error("Error processing CSV:", error);
-                    alert("There was an error parsing the CSV file. Please ensure it is in the correct format.\n\n" + error.message);
+                    showToast("Error parsing CSV. Please check format.", true);
                 }
             };
             reader.readAsText(file);
@@ -423,7 +476,7 @@
             }
 
             if (Object.keys(scheduleData).length === 0) {
-                alert("Could not find any valid appointment data in the file.");
+                showToast("No valid appointment data found.", true);
             }
         }
 
@@ -834,7 +887,7 @@
         // --- Email Schedule Generation ---
         function generateEmailSchedule() {
             if (!currentScheduleDateKey || !scheduleData[currentScheduleDateKey]) {
-                alert("Please select a day with a schedule first.");
+                showToast("Please select a day with a schedule first.", true);
                 return;
             }
 
@@ -938,15 +991,18 @@
             });
 
             const unassignedNonMDs = nonMDs.filter(nonMD => !displayedNonMDs.has(nonMD));
+            
+            const tableStartHour = 8;
+            const tableEndHour = 17;
 
-            // --- Helper function to render a provider row ---
+            // REVERTED: Reverted to the previous version with padding and vertical-align
             const renderProviderRow = (providerInfo) => {
                 const { name: provider, isMD, blocks } = providerInfo;
                 let rowHTML = '';
                 const displayName = isMD ? provider.split(',')[0] : provider.split(',')[1].trim().split(' ')[0];
                 const rowHeight = isMD ? '40px' : '20px';
                 const fontWeight = isMD ? 'bold' : 'normal';
-                rowHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px;">${displayName}</td>`;
+                rowHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle; text-align: center;">${displayName}</td>`;
                 
                 let timeline = Array((tableEndHour - tableStartHour) * 2).fill(null);
                 if (blocks) {
@@ -967,7 +1023,8 @@
                          while(i + colspan < timeline.length && timeline[i+colspan]?.text === timeline[i].text) colspan++;
                          const color = isMD ? '#F472B6' : '#2DD4BF';
                          const borderColor = isMD ? '#bf2269' : '#0D9488';
-                         rowHTML += `<td colspan="${colspan}" style="background-color: ${color}; color: white; text-align: center; padding: 4px; border: 1px solid ${borderColor}; font-size: 8pt; white-space: normal; word-wrap: break-word;">${timeline[i].text}</td>`;
+                         const fullText = timeline[i].text;
+                         rowHTML += `<td colspan="${colspan}" style="background-color: ${color}; color: white; text-align: center; padding: 4px; border: 1px solid ${borderColor}; font-size: 8pt; font-family: Arial, sans-serif; white-space: normal; word-wrap: break-word; vertical-align: middle;">${fullText}</td>`;
                          i += colspan - 1;
                     } else if (!timeline[i]) {
                          rowHTML += `<td style="border: none;"></td>`;
@@ -977,41 +1034,48 @@
                 return rowHTML;
             };
 
-            const tableStartHour = 8;
-            const tableEndHour = 17;
+            
             let tableHTML = `<table style="border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%;">`;
-            tableHTML += `<colgroup><col style="width: 75px;"><col span="${(tableEndHour - tableStartHour) * 2}" style="width: 55px;"></colgroup><tbody>`;
+            
+            // MODIFIED: Replaced <col span=""> with a loop to generate individual <col> elements.
+            let colgroupHTML = `<colgroup><col style="width: 75px;">`;
+            const numTimeCols = (tableEndHour - tableStartHour) * 2;
+            for (let i = 0; i < numTimeCols; i++) {
+                colgroupHTML += `<col style="width: 55px;">`;
+            }
+            colgroupHTML += `</colgroup>`;
+            tableHTML += colgroupHTML;
+            
+            tableHTML += `<tbody>`;
 
-            // Render assigned providers
-            providersToDisplay.forEach((providerInfo) => {
+            // REVERTED: Reverted to the previous version with padding and vertical-align
+            const renderHeaderRow = () => {
+                const rowHeight = '20px';
+                let headerHTML = `<tr style="background-color: #f0f0f0; height: ${rowHeight};">`;
+                headerHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle; text-align: center;">Provider</th>`;
+                for (let h = tableStartHour; h < tableEndHour; h++) {
+                    const displayH = h % 12 || 12;
+                    const period = h < 12 ? 'AM' : 'PM';
+                    headerHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle;">${displayH} ${period}</th>`;
+                }
+                headerHTML += `</tr>`;
+                return headerHTML;
+            }
+
+            providersToDisplay.forEach((providerInfo, index) => {
                 if (providerInfo.isMD) {
-                    if (tableHTML.includes('</tr>')) { // Add spacer if not the very first MD
+                    if (index > 0) { 
                          tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
                     }
-                    tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
-                    tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
-                    for (let h = tableStartHour; h < tableEndHour; h++) {
-                        const displayH = h % 12 || 12;
-                        const period = h < 12 ? 'AM' : 'PM';
-                        tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
-                    }
-                    tableHTML += `</tr>`;
+                    tableHTML += renderHeaderRow();
                 }
                 tableHTML += renderProviderRow(providerInfo);
             });
 
-            // Render Unassigned PAs section if needed
             if (unassignedNonMDs.length > 0) {
                 tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
-                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;"><th colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="text-align: center; padding: 4px; border: 1px solid #555; font-size: 12px; font-weight: bold;">Unassigned PAs</th></tr>`;
-                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;">`;
-                tableHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px;">Provider</th>`;
-                for (let h = tableStartHour; h < tableEndHour; h++) {
-                    const displayH = h % 12 || 12;
-                    const period = h < 12 ? 'AM' : 'PM';
-                    tableHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px;">${displayH} ${period}</th>`;
-                }
-                tableHTML += `</tr>`;
+                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;"><th colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="text-align: center; padding: 4px; border: 1px solid #555; font-size: 12px; font-weight: bold; font-family: Arial, sans-serif; vertical-align: middle;">Unassigned PAs</th></tr>`;
+                tableHTML += renderHeaderRow();
                 unassignedNonMDs.forEach(providerName => {
                     const providerInfo = { name: providerName, isMD: false, blocks: consolidatedSchedules[providerName] };
                     tableHTML += renderProviderRow(providerInfo);
@@ -1024,38 +1088,49 @@
         }
 
 
+        // MODIFIED: Removed explicit width calculation from options. Let dom-to-image calculate it.
         async function copyScheduleAsImage() {
             const content = document.getElementById('email-schedule-content');
             const table = content.querySelector('table');
             if (!table) return;
 
             try {
-                const canvas = await html2canvas(table, {
-                    width: table.scrollWidth,
-                    height: table.scrollHeight,
-                    scale: 2 // Increase scale for better resolution
-                });
-                canvas.toBlob(async (blob) => {
-                    try {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ 'image/png': blob })
-                        ]);
-                        alert('Schedule image copied to clipboard!');
-                    } catch (err) {
-                        console.error('Failed to copy image to clipboard:', err);
-                        alert('Oops, unable to copy image automatically. Please right-click the image to copy.');
-                        const img = document.createElement('img');
-                        img.src = canvas.toDataURL('image/png');
-                        img.style.maxWidth = '100%';
-                        img.style.border = '1px solid #ccc';
-                        content.innerHTML = '';
-                        content.appendChild(img);
-                    }
-                });
+                const options = {
+                    // Use scrollHeight to capture the full vertical length of the table.
+                    height: table.scrollHeight, 
+                    // Explicitly set a white background to avoid transparency issues.
+                    bgcolor: '#FFFFFF'
+                };
+
+                const blob = await domtoimage.toBlob(table, options);
+                
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+                showToast('Copied to clipboard!');
+
             } catch (err) {
-                console.error('html2canvas failed:', err);
-                alert('Oops, could not generate the image.');
-            }
+                console.error('dom-to-image failed:', err);
+                showToast('Oops, unable to copy image automatically.', true);
+                
+                // Fallback to displaying the image if clipboard fails
+                try {
+                    const options = {
+                        height: table.scrollHeight,
+                        bgcolor: '#FFFFFF'
+                    };
+                    const dataUrl = await domtoimage.toPng(table, options);
+                    const img = document.createElement('img');
+                    img.src = dataUrl;
+                    img.style.maxWidth = '100%';
+                    img.style.border = '1px solid #ccc';
+                    content.innerHTML = '';
+                    content.appendChild(img);
+                } catch (pngErr) {
+                    console.error('Fallback to PNG also failed:', pngErr);
+                    showToast('Oops, the image could not be generated.', true);
+                }
+            } 
         }
         
         // --- Draggable Modal Logic ---
@@ -1067,36 +1142,30 @@
             function dragMouseDown(e) {
                 e = e || window.event;
                 
-                // Prevent drag from starting on interactive elements
                 const nonDraggableTags = ['INPUT', 'BUTTON', 'LABEL', 'SELECT', 'FIELDSET', 'LEGEND'];
                 if (nonDraggableTags.includes(e.target.tagName) || e.target.closest('fieldset')) {
                     return;
                 }
 
                 e.preventDefault();
-                // Get the mouse cursor position at startup:
                 pos3 = e.clientX;
                 pos4 = e.clientY;
                 document.onmouseup = closeDragElement;
-                // Call a function whenever the cursor moves:
                 document.onmousemove = elementDrag;
             }
 
             function elementDrag(e) {
                 e = e || window.event;
                 e.preventDefault();
-                // Calculate the new cursor position:
                 pos1 = pos3 - e.clientX;
                 pos2 = pos4 - e.clientY;
                 pos3 = e.clientX;
                 pos4 = e.clientY;
-                // Set the element's new position:
                 elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
                 elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
             }
 
             function closeDragElement() {
-                // Stop moving when mouse button is released:
                 document.onmouseup = null;
                 document.onmousemove = null;
             }
@@ -1107,3 +1176,4 @@
     </script>
 </body>
 </html>
+
