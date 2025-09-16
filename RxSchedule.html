@@ -6,7 +6,6 @@
     <title>Rx Schedule Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- MODIFIED: Switched to dom-to-image library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
     <style>
         /* Custom styles for the application */
@@ -57,17 +56,17 @@
         }
 
         .schedule-scroll-container::-webkit-scrollbar-track {
-            background: #e0e7ff;
+            background: ##e4e6e7;
             border-radius: 10px;
         }
 
         .schedule-scroll-container::-webkit-scrollbar-thumb {
-            background: #6366f1;
+            background: #373b3e;
             border-radius: 10px;
         }
 
         .schedule-scroll-container::-webkit-scrollbar-thumb:hover {
-            background: #4f46e5;
+            background: #000000;
         }
         
         /* Style for the file input button */
@@ -238,8 +237,8 @@
     <div id="email-schedule-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
         <div class="relative top-10 mx-auto p-5 border w-auto max-w-6xl shadow-lg rounded-md bg-white">
             <div class="mt-3">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 text-center">Coverage Schedule</h3>
-                <div id="email-schedule-content" class="mt-4 bg-white overflow-x-auto">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4 text-center">Coverage Schedule</h3>
+                <div id="email-schedule-content" class=" overflow-x-auto">
                     <!-- Generated image will be injected here -->
                 </div>
                 <div class="items-center px-4 py-3 text-right">
@@ -686,7 +685,7 @@
             }
 
             // Fallback default color
-            return 'bg-purple-500 border-purple-700';
+            return 'bg-[#373b3e] border-black';
         }
 
         function format24hto12h(time24) {
@@ -920,7 +919,6 @@
                 return `${displayH}:${String(m).padStart(2, '0')}`;
             };
 
-            // Process non-MDs to consolidate their schedules
             const consolidatedSchedules = {};
             nonMDs.forEach(provider => {
                 const appointments = dayData[provider].sort((a,b) => a.dateTime - b.dateTime);
@@ -937,9 +935,9 @@
                     const apptStart = appt.dateTime.getHours() * 60 + appt.dateTime.getMinutes();
                     const gap = apptStart - currentBlock.end;
 
-                    if (gap <= 15) { // If gap is 15 mins or less, merge
+                    if (gap <= 15) {
                         currentBlock.end = apptStart + appt.duration;
-                    } else { // If gap is larger, save current block and start a new one
+                    } else {
                         blocks.push(currentBlock);
                         currentBlock = { start: apptStart, end: apptStart + appt.duration };
                     }
@@ -948,54 +946,6 @@
                 consolidatedSchedules[provider] = blocks;
             });
 
-            // Build the ordered list of providers for the table
-            const providersToDisplay = [];
-            const displayedNonMDs = new Set();
-            
-            mdWithRanges.forEach(md => {
-                providersToDisplay.push({ name: md, isMD: true, blocks: (timeRanges[md] || []).map(r => ({start: timeToMinutes(r.start), end: timeToMinutes(r.end)})) });
-                
-                const mdRanges = (timeRanges[md] || []).map(r => ({
-                    start: timeToMinutes(r.start),
-                    end: timeToMinutes(r.end),
-                    coveredProviders: r.coveredProviders || []
-                }));
-
-                const allCoveredPAsForThisMD = new Set();
-                mdRanges.forEach(range => {
-                    range.coveredProviders.forEach(p => allCoveredPAsForThisMD.add(p));
-                });
-
-                Array.from(allCoveredPAsForThisMD).sort().forEach(nonMD => {
-                    if (consolidatedSchedules[nonMD]) {
-                        const paWorkBlocks = consolidatedSchedules[nonMD];
-                        let visibleBlocks = [];
-
-                        paWorkBlocks.forEach(paBlock => {
-                            mdRanges.forEach(mdBlock => {
-                                if (mdBlock.coveredProviders.includes(nonMD)) {
-                                    const overlapStart = Math.max(paBlock.start, mdBlock.start);
-                                    const overlapEnd = Math.min(paBlock.end, mdBlock.end);
-
-                                    if (overlapStart < overlapEnd) {
-                                        visibleBlocks.push({ start: overlapStart, end: overlapEnd });
-                                    }
-                                }
-                            });
-                        });
-                        
-                        providersToDisplay.push({ name: nonMD, isMD: false, blocks: visibleBlocks });
-                        displayedNonMDs.add(nonMD);
-                    }
-                });
-            });
-
-            const unassignedNonMDs = nonMDs.filter(nonMD => !displayedNonMDs.has(nonMD));
-            
-            const tableStartHour = 8;
-            const tableEndHour = 17;
-
-            // REVERTED: Reverted to the previous version with padding and vertical-align
             const renderProviderRow = (providerInfo) => {
                 const { name: provider, isMD, blocks } = providerInfo;
                 let rowHTML = '';
@@ -1004,11 +954,11 @@
                 const fontWeight = isMD ? 'bold' : 'normal';
                 rowHTML += `<tr style="height: ${rowHeight};"><td style="font-weight: ${fontWeight}; padding: 4px; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle; text-align: center;">${displayName}</td>`;
                 
-                let timeline = Array((tableEndHour - tableStartHour) * 2).fill(null);
+                let timeline = Array((17 - 8) * 2).fill(null);
                 if (blocks) {
                     blocks.forEach(block => {
-                        const startSlot = Math.floor((block.start - tableStartHour * 60) / 30);
-                        const endSlot = Math.ceil((block.end - tableStartHour * 60) / 30);
+                        const startSlot = Math.floor((block.start - 8 * 60) / 30);
+                        const endSlot = Math.ceil((block.end - 8 * 60) / 30);
                         const duration = block.end - block.start;
                         let text = duration < 60 ? `${minutesToShortTime(block.start)}-${minutesToShortTime(block.end)}` : `${minutesTo12h(block.start)} - ${minutesTo12h(block.end)}`;
                         for (let i = startSlot; i < endSlot; i++) {
@@ -1034,75 +984,99 @@
                 return rowHTML;
             };
 
-            
-            let tableHTML = `<table style="border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%;">`;
-            
-            // MODIFIED: Replaced <col span=""> with a loop to generate individual <col> elements.
-            let colgroupHTML = `<colgroup><col style="width: 75px;">`;
-            const numTimeCols = (tableEndHour - tableStartHour) * 2;
-            for (let i = 0; i < numTimeCols; i++) {
-                colgroupHTML += `<col style="width: 55px;">`;
-            }
-            colgroupHTML += `</colgroup>`;
-            tableHTML += colgroupHTML;
-            
-            tableHTML += `<tbody>`;
-
-            // REVERTED: Reverted to the previous version with padding and vertical-align
             const renderHeaderRow = () => {
                 const rowHeight = '20px';
                 let headerHTML = `<tr style="background-color: #f0f0f0; height: ${rowHeight};">`;
                 headerHTML += `<th style="padding: 4px; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle; text-align: center;">Provider</th>`;
-                for (let h = tableStartHour; h < tableEndHour; h++) {
+                for (let h = 8; h < 17; h++) {
                     const displayH = h % 12 || 12;
                     const period = h < 12 ? 'AM' : 'PM';
                     headerHTML += `<th colspan="2" style="text-align: center; border: 1px solid #555; font-size: 12px; font-family: Arial, sans-serif; vertical-align: middle;">${displayH} ${period}</th>`;
                 }
                 headerHTML += `</tr>`;
                 return headerHTML;
+            };
+            
+            const tableBaseStyle = `border-collapse: separate; border-spacing: 0; font-family: Arial, sans-serif; table-layout: fixed; width: 100%; background-color: white;`;
+            let colgroupHTML = `<colgroup><col style="width: 75px;">`;
+            const numTimeCols = (17 - 8) * 2;
+            for (let i = 0; i < numTimeCols; i++) {
+                colgroupHTML += `<col style="width: 55px;">`;
             }
+            colgroupHTML += `</colgroup>`;
 
-            providersToDisplay.forEach((providerInfo, index) => {
-                if (providerInfo.isMD) {
-                    if (index > 0) { 
-                         tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
+            let allTablesHTML = [];
+            const displayedNonMDs = new Set();
+            
+            mdWithRanges.forEach(md => {
+                let tableHTML = `<table style="${tableBaseStyle}">${colgroupHTML}<tbody>`;
+                tableHTML += renderHeaderRow();
+                const mdInfo = { name: md, isMD: true, blocks: (timeRanges[md] || []).map(r => ({start: timeToMinutes(r.start), end: timeToMinutes(r.end)})) };
+                tableHTML += renderProviderRow(mdInfo);
+
+                const mdTimeRanges = (timeRanges[md] || []).map(r => ({
+                    start: timeToMinutes(r.start),
+                    end: timeToMinutes(r.end),
+                    coveredProviders: r.coveredProviders || []
+                }));
+
+                const coveredPAs = new Set();
+                mdTimeRanges.forEach(range => range.coveredProviders.forEach(p => coveredPAs.add(p)));
+
+                Array.from(coveredPAs).sort().forEach(nonMD => {
+                    if (consolidatedSchedules[nonMD]) {
+                        const paWorkBlocks = consolidatedSchedules[nonMD];
+                        let visibleBlocks = [];
+                        paWorkBlocks.forEach(paBlock => {
+                            mdTimeRanges.forEach(mdBlock => {
+                                if (mdBlock.coveredProviders.includes(nonMD)) {
+                                    const overlapStart = Math.max(paBlock.start, mdBlock.start);
+                                    const overlapEnd = Math.min(paBlock.end, mdBlock.end);
+                                    if (overlapStart < overlapEnd) {
+                                        visibleBlocks.push({ start: overlapStart, end: overlapEnd });
+                                    }
+                                }
+                            });
+                        });
+                        const nonMDInfo = { name: nonMD, isMD: false, blocks: visibleBlocks };
+                        tableHTML += renderProviderRow(nonMDInfo);
+                        displayedNonMDs.add(nonMD);
                     }
-                    tableHTML += renderHeaderRow();
-                }
-                tableHTML += renderProviderRow(providerInfo);
+                });
+                tableHTML += `</tbody></table>`;
+                allTablesHTML.push(tableHTML);
             });
 
+            const unassignedNonMDs = nonMDs.filter(nonMD => !displayedNonMDs.has(nonMD));
             if (unassignedNonMDs.length > 0) {
-                tableHTML += `<tr style="height: 10px;"><td colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="border: none;"></td></tr>`;
-                tableHTML += `<tr style="background-color: #f0f0f0; height: 20px;"><th colspan="${(tableEndHour - tableStartHour) * 2 + 1}" style="text-align: center; padding: 4px; border: 1px solid #555; font-size: 12px; font-weight: bold; font-family: Arial, sans-serif; vertical-align: middle;">Unassigned PAs</th></tr>`;
-                tableHTML += renderHeaderRow();
-                unassignedNonMDs.forEach(providerName => {
+                 let unassignedTableHTML = `<table style="${tableBaseStyle}">${colgroupHTML}<tbody>`;
+                 unassignedTableHTML += `<tr style="background-color: #f0f0f0; height: 20px;"><th colspan="${numTimeCols + 1}" style="text-align: center; padding: 4px; border: 1px solid #555; font-size: 12px; font-weight: bold; font-family: Arial, sans-serif; vertical-align: middle;">Unassigned PAs</th></tr>`;
+                 unassignedTableHTML += renderHeaderRow();
+                 unassignedNonMDs.forEach(providerName => {
                     const providerInfo = { name: providerName, isMD: false, blocks: consolidatedSchedules[providerName] };
-                    tableHTML += renderProviderRow(providerInfo);
+                    unassignedTableHTML += renderProviderRow(providerInfo);
                 });
+                 unassignedTableHTML += `</tbody></table>`;
+                 allTablesHTML.push(unassignedTableHTML);
             }
 
-            tableHTML += `</tbody></table>`;
-            document.getElementById('email-schedule-content').innerHTML = tableHTML;
+            document.getElementById('email-schedule-content').innerHTML = allTablesHTML.join('<div style="height: 10px;"></div>');
             emailScheduleModal.classList.remove('hidden');
         }
 
 
-        // MODIFIED: Removed explicit width calculation from options. Let dom-to-image calculate it.
         async function copyScheduleAsImage() {
             const content = document.getElementById('email-schedule-content');
-            const table = content.querySelector('table');
-            if (!table) return;
+            if (!content) return;
+            
+            await new Promise(resolve => requestAnimationFrame(resolve));
 
             try {
                 const options = {
-                    // Use scrollHeight to capture the full vertical length of the table.
-                    height: table.scrollHeight, 
-                    // Explicitly set a white background to avoid transparency issues.
-                    bgcolor: '#FFFFFF'
+                    height: content.scrollHeight, 
                 };
 
-                const blob = await domtoimage.toBlob(table, options);
+                const blob = await domtoimage.toBlob(content, options);
                 
                 await navigator.clipboard.write([
                     new ClipboardItem({ 'image/png': blob })
@@ -1115,16 +1089,15 @@
                 
                 // Fallback to displaying the image if clipboard fails
                 try {
-                    const options = {
-                        height: table.scrollHeight,
-                        bgcolor: '#FFFFFF'
+                     const options = {
+                        height: content.scrollHeight,
                     };
-                    const dataUrl = await domtoimage.toPng(table, options);
+                    const dataUrl = await domtoimage.toPng(content, options);
                     const img = document.createElement('img');
                     img.src = dataUrl;
                     img.style.maxWidth = '100%';
-                    img.style.border = '1px solid #ccc';
-                    content.innerHTML = '';
+                    img.style.border = '1px solid #ccc'; // Added a border for visibility
+                    content.innerHTML = ''; // Clear the tables
                     content.appendChild(img);
                 } catch (pngErr) {
                     console.error('Fallback to PNG also failed:', pngErr);
