@@ -258,6 +258,19 @@
 
 
     <script>
+
+	// --- Disable main scroll on schedule hover ---
+        const scheduleScrollContainerForHover = document.querySelector('.schedule-scroll-container');
+        if (scheduleScrollContainerForHover) {
+            scheduleScrollContainerForHover.addEventListener('mouseenter', () => {
+                document.body.style.overflow = 'hidden'; // Hide main scrollbar
+            });
+
+            scheduleScrollContainerForHover.addEventListener('mouseleave', () => {
+                document.body.style.overflow = ''; // Restore main scrollbar
+            });
+        }
+
         // --- CONFIGURATION ---
         const SCHEDULE_START_HOUR = 7; // 7:00 AM
         const DEFAULT_SCHEDULE_END_HOUR = 19; // 7:00 PM
