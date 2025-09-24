@@ -179,7 +179,15 @@
 
         <!-- Schedule Display Section (moved outside the centered container to be full-width) -->
         <div id="schedule-view-container" class="hidden mt-8">
-             <h3 id="schedule-date-title" class="text-xl font-bold text-gray-800 mb-4 text-center"></h3>
+             <div class="flex items-center justify-center mb-4">
+                <button id="prev-day" class="p-2 rounded-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h3 id="schedule-date-title" class="text-xl font-bold text-gray-800 mx-4 text-center w-80"></h3>
+                <button id="next-day" class="p-2 rounded-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
              <div class="schedule-scroll-container bg-white rounded-lg shadow-sm border border-gray-200">
                 <div id="schedule-grid" class="flex min-w-max">
                     <!-- Time slots will be injected here -->
@@ -273,7 +281,7 @@
 
         // --- CONFIGURATION ---
         const SCHEDULE_START_HOUR = 7; // 7:00 AM
-        const DEFAULT_SCHEDULE_END_HOUR = 19; // 7:00 PM
+        const DEFAULT_SCHEDULE_END_HOUR = 17; // 5:00 PM
         const PIXELS_PER_MINUTE = 2.5; // Controls the vertical scale of appointments
         const MD_PROVIDERS = [
             'Zayat, Estephan',
@@ -294,6 +302,8 @@
         const calendarGrid = document.getElementById('calendar-grid');
         const prevMonthBtn = document.getElementById('prev-month');
         const nextMonthBtn = document.getElementById('next-month');
+        const prevDayBtn = document.getElementById('prev-day');
+        const nextDayBtn = document.getElementById('next-day');
         const scheduleViewContainer = document.getElementById('schedule-view-container');
         const scheduleDateTitle = document.getElementById('schedule-date-title');
         const timeSlotsWrapper = document.getElementById('time-slots-wrapper');
@@ -322,6 +332,8 @@
         csvFileInput.addEventListener('change', handleFileUpload);
         prevMonthBtn.addEventListener('click', () => changeMonth(-1));
         nextMonthBtn.addEventListener('click', () => changeMonth(1));
+        prevDayBtn.addEventListener('click', () => changeDay(-1));
+        nextDayBtn.addEventListener('click', () => changeDay(1));
         closeTimeRangeModalBtn.addEventListener('click', closeTimeRangeModal);
         saveTimeRangeBtn.addEventListener('click', saveTimeRanges);
         generateEmailBtn.addEventListener('click', generateEmailSchedule);
@@ -539,8 +551,49 @@
             renderCalendar();
         }
 
+        function changeDay(direction) {
+            if (!currentScheduleDateKey || Object.keys(scheduleData).length === 0) return;
+
+            const availableDates = Object.keys(scheduleData).sort();
+            const currentIndex = availableDates.indexOf(currentScheduleDateKey);
+
+            if (currentIndex === -1) return;
+
+            const nextIndex = currentIndex + direction;
+
+            if (nextIndex >= 0 && nextIndex < availableDates.length) {
+                const nextDateKey = availableDates[nextIndex];
+                renderSchedule(nextDateKey);
+            }
+        }
+
+        function updateDayNavButtons() {
+            const availableDates = Object.keys(scheduleData).sort();
+            const currentIndex = availableDates.indexOf(currentScheduleDateKey);
+            
+            if (currentIndex === -1) {
+                prevDayBtn.disabled = true;
+                nextDayBtn.disabled = true;
+            } else {
+                prevDayBtn.disabled = currentIndex === 0;
+                nextDayBtn.disabled = currentIndex === availableDates.length - 1;
+            }
+
+            [prevDayBtn, nextDayBtn].forEach(btn => {
+                if (btn.disabled) {
+                    btn.classList.add('text-gray-300', 'cursor-not-allowed');
+                    btn.classList.remove('hover:bg-gray-100', 'text-gray-800');
+                } else {
+                    btn.classList.remove('text-gray-300', 'cursor-not-allowed');
+                    btn.classList.add('hover:bg-gray-100', 'text-gray-800');
+                }
+            });
+        }
+
+
         function renderSchedule(dateKey) {
             currentScheduleDateKey = dateKey;
+            updateDayNavButtons();
             generateEmailBtn.disabled = false;
 
             const dayData = scheduleData[dateKey];
@@ -1162,4 +1215,3 @@
     </script>
 </body>
 </html>
-
