@@ -1139,15 +1139,23 @@
         }
 
 
-        async function copyScheduleAsImage() {
+async function copyScheduleAsImage() {
             const content = document.getElementById('email-schedule-content');
             if (!content) return;
             
             await new Promise(resolve => requestAnimationFrame(resolve));
 
+            // --- START FIX ---
+            // Store the original overflow style and then hide it
+            const originalOverflow = content.style.overflow;
+            content.style.overflow = 'visible'; 
+            // --- END FIX ---
+
             try {
                 const options = {
+                    // Use both scrollHeight and scrollWidth to define the full capture area
                     height: content.scrollHeight, 
+                    width: content.scrollWidth // <-- ADD THIS
                 };
 
                 const blob = await domtoimage.toBlob(content, options);
@@ -1164,6 +1172,7 @@
                 try {
                      const options = {
                         height: content.scrollHeight,
+                        width: content.scrollWidth // <-- ADD THIS TO FALLBACK AS WELL
                     };
                     const dataUrl = await domtoimage.toPng(content, options);
                     const img = document.createElement('img');
@@ -1176,8 +1185,14 @@
                     console.error('Fallback to PNG also failed:', pngErr);
                     showToast('Oops, the image could not be generated.', true);
                 }
+            } finally {
+                // --- START FIX ---
+                // Always restore the original style, even if the capture fails
+                content.style.overflow = originalOverflow;
+                // --- END FIX ---
             } 
         }
+
         
         // --- Draggable Modal Logic ---
         function makeDraggable(elmnt, handle) {
