@@ -4,6 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rx Schedule Generator</title>
+    <script>
+    function loadLocalTailwind() {
+        // Prevent infinite loop if local file also fails
+        if (window.tailwindFallbackLoaded) return;
+        window.tailwindFallbackLoaded = true;
+        
+        console.warn('Tailwind CDN failed or invalid. Loading local fallback.');
+        var script = document.createElement('script');
+        script.src = 'tailwindcss.js';
+        document.head.appendChild(script);
+        }
+
+        // Catch SyntaxErrors (e.g. if CDN sends HTML instead of JS)
+        window.addEventListener('error', function(e) {
+        // Check if the error is from the CDN script specifically
+            if (e.target.src && e.target.src.includes('cdn.tailwindcss.com')) {
+                loadLocalTailwind();
+            }
+        }, true); // Use capture phase to catch script errors
+    </script>
+
+<script 
+    src="https://cdn.tailwindcss.com" 
+    onerror="loadLocalTailwind()">
+</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
