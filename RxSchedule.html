@@ -929,6 +929,14 @@
 
         function formatSmartTime(inputElement) {
             let value = inputElement.value.trim();
+
+            // NEW: Auto-pad single digit hour if user types "4:30" -> "04:30"
+            // This ensures the subsequent logic treats it as 4:30 (4am or 4pm depending on logic)
+            // instead of "430" which often gets parsed as 6pm in this specific system.
+            if (/^\d:/.test(value)) {
+                value = '0' + value;
+            }
+
             if (!value) {
                 inputElement.dataset.time24 = '';
                 return;
@@ -1262,4 +1270,3 @@ async function copyScheduleAsImage() {
     </script>
 </body>
 </html>
-
