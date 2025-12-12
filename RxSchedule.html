@@ -41,7 +41,7 @@
         
         /* Styles for the focused schedule view */
         body.schedule-active #app {
-            padding: 1rem; /* Adjust padding for full view */
+            padding: 0rem; /* Adjust padding for full view */
             height: 100vh;
         }
         body.schedule-active #schedule-view-container {
@@ -201,7 +201,7 @@
 
         <!-- Schedule Display Section (now the main view) -->
         <div id="schedule-view-container" class="hidden">
-             <div class="flex items-center justify-end mb-4 relative h-12">
+             <div class="flex items-center justify-end mb-4 relative h-12 p-8">
                 <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center">
                     <button id="prev-day" class="p-2 rounded-md">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
